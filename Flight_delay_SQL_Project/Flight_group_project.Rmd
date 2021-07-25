@@ -1,0 +1,356 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+```{r}
+library(ggplot2)
+library(RPostgreSQL)
+drvv <- dbDriver("PostgreSQL")
+con <- dbConnect(drvv,
+                 dbname = "flightdb",
+                 password = 19051991,
+                 host = "localhost",
+                 port = 5432,
+                 user = "postgres")
+flights <- dbGetQuery(con,
+                          "SELECT *
+                          FROM flights"
+                          
+)
+
+airlines <- dbGetQuery(con,
+                          "SELECT *
+                          FROM airlines"
+                          
+)
+
+airports <- dbGetQuery(con,
+                          "SELECT *
+                          FROM airports"
+                          
+)
+
+
+cancellation_codes <- dbGetQuery(con,
+                          "SELECT *
+                          FROM cancellation_codes"
+                          
+)
+```
+
+```{sql, connection=con}
+SELECT *
+FROM flights
+LIMIT 5;
+```
+```{sql, connection=con, output.var = "mydataframe"}
+
+
+SELECT CASE WHEN CAST(LEFT(scheduled_departure, 2) AS int) >= 0 AND CAST(LEFT(scheduled_departure, 2) AS int) < 6 THEN 'Night'
+  WHEN CAST(LEFT(scheduled_departure, 2) AS int) >= 6 AND CAST(LEFT(scheduled_departure, 2) AS int) < 12 THEN 'Morning'
+  WHEN CAST(LEFT(scheduled_departure, 2) AS int) >= 12 AND CAST(LEFT(scheduled_departure, 2) AS int) < 18 THEN 'Afternoon'
+  ELSE 'Evening' END AS day_time
+FROM flights
+LIMIT 50;
+
+
+```
+
+
+```{r, fig.width=10}
+day_time_month <- dbGetQuery(con, " WITH 
+
+SELECT CONCAT(day_time, '-', month) AS time, avg_delay
+FROM (SELECT CASE WHEN hour <= 6 THEN 'Night'
+  WHEN hour <=12 THEN 'Morning'
+  WHEN hour <=18 THEN 'Afternoon'
+  ELSE 'Evening' END AS day_time, month AS day, ROUND(AVG(delay), 2) AS avg_delay
+  FROM (SELECT CAST(LEFT(scheduled_departure, 2) AS int) AS hour, month, arrival_delay AS delay
+        FROM flights) AS subq")
+day_time_month
+
+
+day_time <- dbGetQuery(con, "SELECT CASE WHEN hour <= 6 THEN 'Night'
+  WHEN hour <=12 THEN 'Morning'
+  WHEN hour <=18 THEN 'Afternoon'
+  ELSE 'Evening' END AS day_time, ROUND(AVG(delay), 2) AS avg_delay
+  
+FROM  (SELECT CAST(LEFT(scheduled_departure, 2) AS int) AS hour, arrival_delay AS delay
+  FROM flights) AS subq
+GROUP BY day_time;")
+day_time$day_time <- factor(day_time$day_time, levels = c("Morning","Afternoon", "Evening","Night"))
+
+day_time
+
+ggplot(day_time, aes(x= day_time, y=avg_delay, fill="red")) +
+  geom_col()+
+  labs(title="Average delay in minutes by the time of day",
+       x="Time of Day",
+       y="Average Delay (in min.)")+
+  theme(legend.position = "none")
+```
+
+```{r, fig.width=10}
+day_time0 <- dbGetQuery(con, "SELECT CASE WHEN hour <= 6 THEN 'Night'
+  WHEN hour <=12 THEN 'Morning'
+  WHEN hour <=18 THEN 'Afternoon'
+  ELSE 'Evening' END AS day_time, ROUND(AVG(delay), 2) AS avg_delay
+  
+FROM  (SELECT CAST(LEFT(scheduled_departure, 2) AS int) AS hour, arrival_delay AS delay
+  FROM flights
+  WHERE arrival_delay > 0) AS subq
+GROUP BY day_time;")
+day_time0$day_time <- factor(day_time0$day_time, levels = c("Morning","Afternoon", "Evening","Night"))
+
+
+ggplot(day_time0, aes(x= day_time, y=avg_delay, fill="red")) +
+  geom_col()+
+  labs(title="Average delay in minutes by the time of day",
+       x="Time of Day",
+       y="Average Delay (in min.)")+
+  theme(legend.position = "none")
+```
+We have split the day into 4 parts. Morning represents between 06:00 and 12:00 o'clock, afternoon represents between 12:00 and 18:00 o'clock, evening represents between 18:00-24:00 and night represents between 00:00 and 06:00. The bar chart below shows that, the delays are last longer in evenings and the average delay time reaches approximately to 40 minutes. On the otherhand, the least average delay time is observed at nights. This might be a consequence of the rush during the evenings. However in the nights, there are not as much as flight than the rest of the day.
+
+
+```{r, fig.width=10}
+day_time_deneme <- dbGetQuery(con, "SELECT CASE WHEN hour <= 6 THEN 'Night'
+  WHEN hour <=12 THEN 'Morning'
+  WHEN hour <=18 THEN 'Afternoon'
+  ELSE 'Evening' END AS day_time, COUNT(airport) AS flight_count
+FROM  (SELECT CAST(LEFT(scheduled_departure, 2) AS int) AS hour, origin_airport AS airport
+  FROM flights) AS subq
+GROUP BY day_time;")
+day_time_deneme
+
+
+dbGetQuery(con, "SELECT CAST(LEFT(scheduled_departure, 2) AS int) AS hour, COUNT(origin_airport) AS airport
+  FROM flights
+  WHERE arrival_delay>30
+  GROUP BY hour")
+
+
+day_time0$day_time <- factor(day_time0$day_time, levels = c("Morning","Afternoon", "Evening","Night"))
+
+
+ggplot(day_time0, aes(x= day_time, y=avg_delay, fill="red")) +
+  geom_col()+
+  labs(title="Average delay in minutes by the time of day",
+       x="Time of Day",
+       y="Average Delay (in min.)")+
+  theme(legend.position = "none")
+```
+
+```{r, fig.width=10}
+day_time_alt <- dbGetQuery(con, "SELECT CASE WHEN hour <= 2 OR hour >=21 THEN 'Night'
+  WHEN hour <=8 OR hour >=3 THEN 'Morning'
+  WHEN hour <=14 OR hour >=9 THEN 'Afternoon'
+  ELSE 'Evening' END AS day_time, ROUND(AVG(delay), 2) AS avg_delay
+  
+FROM  (SELECT CAST(LEFT(scheduled_departure, 2) AS int) AS hour, arrival_delay AS delay
+  FROM flights
+  WHERE arrival_delay > 0) AS subq
+GROUP BY day_time;")
+day_time_alt$day_time <- factor(day_time_alt$day_time, levels = c("Morning","Afternoon", "Evening","Night"))
+
+
+ggplot(day_time_alt, aes(x= day_time, y=avg_delay, fill="red")) +
+  geom_col()+
+  labs(title="Average delay in minutes by the time of day",
+       x="Time of Day",
+       y="Average Delay (in min.)")+
+  theme(legend.position = "none")
+```
+
+
+
+
+
+```{r}
+dbGetQuery(con, "SELECT CAST(LEFT(scheduled_departure, 2) AS int) AS hour, AVG(arrival_delay) AS delay
+  FROM flights
+  WHERE arrival_delay > 30 
+GROUP BY hour;")
+
+
+
+dbGetQuery(con, "SELECT CAST(LEFT(scheduled_departure, 2) AS int) AS hour, AVG(arrival_delay) AS delay
+  FROM flights
+GROUP BY hour;")
+```
+
+
+```{r, fig.width=10}
+destination <- dbGetQuery(con, "SELECT MAX(route) AS route, delay_num FROM (SELECT route, SUM(delays) AS delay_num FROM
+((SELECT CONCAT(origin_airport,'- ',  destination_airport) AS route, COUNT(flight_number) AS delays FROM flights
+  WHERE arrival_delay > 30
+  GROUP BY route
+  ORDER BY delays DESC
+  LIMIT 30)
+  UNION ALL
+  (SELECT CONCAT(destination_airport,'- ',  origin_airport) AS route, COUNT(flight_number) AS delays FROM flights
+  WHERE arrival_delay > 30
+  GROUP BY route
+  ORDER BY delays DESC
+  LIMIT 30)) d
+  GROUP BY route) AS t
+  GROUP BY delay_num
+  ORDER BY delay_num DESC
+  ")
+
+destination$route <- factor(destination$route, levels=destination$route)
+ggplot(destination, aes(x=route, y=delay_num, group=1))+
+  geom_line(size = 2)+
+  theme(axis.text.x = element_text(angle=60, size=10, hjust = 1),
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "none")+
+  labs(title = "Most delayed routes in 2015",
+       x="Route",
+       y="Number of Delays",
+       caption="*Only delays with more than 30 minutes have considered")
+
+```
+
+
+```{r}
+dbGetQuery(con, "SELECT MAX(route) AS route, delay_num/total_flights FROM 
+    ((SELECT route, SUM(delays) AS delay_num FROM
+        ((SELECT CONCAT(origin_airport,'- ',  destination_airport) AS route, COUNT(flight_number) AS delays FROM flights
+          WHERE arrival_delay > 30
+          GROUP BY route
+          ORDER BY delays DESC
+          LIMIT 30)
+            UNION ALL
+    (SELECT CONCAT(destination_airport,'- ',  origin_airport) AS route, COUNT(flight_number) AS delays FROM flights
+          WHERE arrival_delay > 30
+          GROUP BY route
+          ORDER BY delays DESC
+          LIMIT 30)) d
+    GROUP BY route)
+    UNION ALL
+    (SELECT route, SUM(delays) AS total_flights FROM
+        ((SELECT CONCAT(origin_airport,'- ',  destination_airport) AS route, COUNT(flight_number) AS delays FROM flights
+          GROUP BY route
+          ORDER BY delays DESC
+          LIMIT 30)
+            UNION ALL
+    (SELECT CONCAT(destination_airport,'- ',  origin_airport) AS route, COUNT(flight_number) AS delays FROM flights
+          GROUP BY route
+          ORDER BY delays DESC
+          LIMIT 30)) d
+    GROUP BY route)) as k
+  GROUP BY delay_num
+  ORDER BY delay_num DESC
+  ")
+
+
+
+dbGetQuery(con, "WITH subq AS (SELECT CONCAT(origin_airport,'- ',  destination_airport) AS route, COUNT(flight_number) AS delays 
+FROM flights
+INNER JOIN airports
+ON origin_airport = iata_code
+WHERE arrival_delay > 30
+GROUP BY route),
+UNION ALL
+subq2 AS (SELECT CONCAT(origin_airport,'- ',  destination_airport) AS route, COUNT(flight_number) AS total_flights 
+FROM flights
+INNER JOIN airports
+ON origin_airport = iata_code
+GROUP BY route)
+
+SELECT route, subq.delays/subq2.total_flights AS delayed_percent
+FROM subq
+INNER JOIN subq2
+USING(route)
+GROUP BY route
+ORDER BY delayed_percent DESC
+")
+
+
+```
+
+
+
+
+
+```{r, fig.width=10}
+head(flights)
+
+# taxi <- dbGetQuery(con, "WITH origin AS (
+#   SELECT origin_airport AS airport, ROUND(AVG(taxi_out),2) AS avg_taxi_out
+#   FROM flights
+#   INNER JOIN airports
+#   ON origin_airport = iata_code
+#   GROUP BY origin_airport
+# ),
+# destination AS (
+#   SELECT destination_airport AS airport, ROUND(AVG(taxi_in),2) AS avg_taxi_in
+#   FROM flights
+#   INNER JOIN airports
+#   ON destination_airport = iata_code
+#   GROUP BY destination_airport) 
+# SELECT iata_code AS airport_name, AVG(avg_taxi_out, avg_taxi,in)
+# FROM airports
+# INNER JOIN origin
+# ON iata_code=origin_airport
+# INNER JOIN destination
+# ON iata_code = destination_airport
+# GROUP BY airport_name
+# LIMIT 30;") 
+# taxi
+```
+
+
+```{r, fig.width=10}
+airport_taxi30 <- dbGetQuery(con, "SELECT airport, ROUND(SUM(alltaxi.all_taxi)/ SUM(alltaxi.num),2) AS average_taxi FROM
+  ((SELECT origin_airport AS airport, ROUND(SUM(taxi_out),2) AS all_taxi, COUNT(origin_airport) AS num
+  FROM flights
+  INNER JOIN airports
+  ON origin_airport = iata_code
+  GROUP BY origin_airport)
+  UNION ALL
+  (SELECT destination_airport AS airport, ROUND(SUM(taxi_in),2) AS all_taxi, COUNT(destination_airport) AS num
+  FROM flights
+  INNER JOIN airports
+  ON destination_airport = iata_code
+  GROUP BY destination_airport)) alltaxi
+GROUP BY airport
+ORDER BY average_taxi DESC
+LIMIT 30")
+
+airport_taxi30$airport <- factor(airport_taxi30$airport, levels=airport_taxi30$airport)
+ggplot(airport_taxi30, aes(x=airport, y=average_taxi, fill="red"))+
+  geom_col()+
+  theme(axis.text.x = element_text(angle=90, size=10, hjust = 1),
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "none")+
+  labs(title="Average taxi time in minutes by airports",
+       x = "Airports",
+       y="Average taxi time (min.)")
+
+
+```
+
+Taxi means the time that passed while taking position along the ground before the plane take-off or after landing. Taxi time could be depend on vary such as; volume, distance of the landing field so on. According to the graph, the top three airports, JFK, LGA and ORD are clearly separated from the others. While the general average taxi time is around 13 minutes, it takes more than 15 minutes for those 3 airports.
+
+
+- Delays mostly occurs between San Francisco International Airport (SFO) and Los Angles International Airport (LAX) which normally can be considered as a close ranged flight (takes approximately 1 hour and 20 minutes).
+- Delays take longer time in average at the evenings compared to the rest of the day.
+- Planes need more taxi time at the John F. Kennedy International Airport (NY), LaGuardia International Airport (NY) and O'Hare International Airport (IL).
+
+Delay time could be considered as one of the biggest issues in aviation. It can be affected by a lot of variable such as; distance, taxi time, weather, volume, location of the airport and so on. Therefore it is not easy to avoid at all but might be reduced by the joint R&D projects that conducted by airlines and airport management.

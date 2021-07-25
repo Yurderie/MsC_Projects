@@ -1,0 +1,727 @@
+---
+title: "Analysis of Commercial Flights in the USA in 2015"
+author: "Group Rhapsody"
+date: "January 24, 2021"
+output: 
+  html_document:
+    code_folding: hide
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+    toc_depth: 5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(knitr)
+library(RPostgreSQL)
+library(gridExtra)
+library(leaflet)
+library(ggrepel)
+```
+
+## Importing Libraries
+
+Below libraries need to be installed before starting the analysis.
+
+```{r, eval=FALSE, class.source = 'fold-show'}
+library(tidyverse)
+library(knitr)
+library(RPostgreSQL)
+library(gridExtra)
+library(leaflet)
+library(ggrepel)
+```
+
+## Group Members
+
++ Cem Yüzbaşıoğlu
++ Emre Demirhan
++ Emre Kemal Yurderi
++ Serhan Bayram
++ Umut Turhan
+
+## Dataset
+
+The dataset is provided from Kaggle, named as **[Airline Flight Delays](https://www.kaggle.com/gauravmehta13/airline-flight-delays)**, published by Gaurav Yadav. The data folder consists of 4 individual datasets. The dataset is gathered for the U.S DOT Air travel Consumer report and it has more than 5 million records.
+
+## Database Creation & Connection 
+
+In order to conduct an analysis, a database is created using PostgreSQL. Each dataset, used in this analysis, is gathered by connecting RStudio to the database and writing SQL queries in RStudio. In order to replicate the following work, first a database named `flightdb` needs to be created. After that, a backup of the database can be restored into `flightdb`.
+
+Database creation query is as follows:
+
+```{sql, eval=FALSE, class.source = 'fold-show'}
+CREATE DATABASE flightdb
+WITH
+OWNER = postgres`
+ENCODING = 'UTF8'`
+CONNECTION LIMIT = -1;
+```
+
+The backup file can be downloaded from here: [Backup File Link](https://drive.google.com/file/d/1RWee-1oqJ6vD_BuvZ83e_dtVYHx6EYX0/view?usp=sharing)
+
+After restoring the database, with below code, the database becomes accessible by RStudio.
+
+```{r, results='hide', class.source = 'fold-show'}
+drvv <- dbDriver("PostgreSQL")
+con <- dbConnect(drvv,
+                 dbname = "flightdb",
+                 host = "localhost",
+                 port = 5432,
+                 user = "postgres")
+```
+
+## Data Analysis
+
+The report is aimed to provide a general overview of the airlines and the airports in the US in terms of their performances. The report also examines the riskiness of a flight for the customers.
+
+### General Summary
+
+#### Monthly
+
+Total number of flights by month is shown in the graph. The lowest number of flights was in February with about 425,000 and the highest was in July with about 520,000 flight. It is seen that the total number of flights has increased between February and September due to the increase in demand to flight. After August to February, the average total number of flights were about 475,000.
+
+#### Day of Month 
+
+When we analyze the total number of flights by day of month, the average number was around 192.000 per day. There is no big difference between days and total number of flights fluctuates between 186,000 and 195,000.
+
+#### Day of Week
+
+When we look at the difference between day of week, it is clearly seen that total number of flights on Saturday was lower than the any other day week with the number around 700,000. On the other hand, average number of total flights were around 860,000 in weekdays. We can think that this difference is caused by business travels. 
+
+```{r, fig.width=10}
+flights_month <- dbGetQuery(con,
+                              'SELECT month, count(month) as month_count
+                              FROM flights group by month')
+
+
+flights_month$month_name <- month.abb[flights_month$month]
+
+monthly_plot <- ggplot(flights_month, aes(factor(month_name, levels=month.abb), month_count, group=1)) +
+  geom_line() + 
+  labs(x="Month",
+       y="Number of Flights",
+       title= "Flight Distribution by Months") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+flights_day <- dbGetQuery(con,
+                              'SELECT day, count(day) as day_count
+                              FROM flights group by day')
+
+flights_day$day <- factor(flights_day$day)
+
+daily_plot <- ggplot(head(flights_day,30), aes(day, day_count, group=1)) + 
+  geom_line() + 
+  labs(x="Day of Month",
+       y="Number of Flights",
+       title= "Flight Distribution by Day of Month") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+flights_dow <- dbGetQuery(con,
+                              'SELECT day_of_week, count(day_of_week) as dow_count
+                              FROM flights group by day_of_week')
+
+flights_dow$day_of_week <- factor(flights_dow$day_of_week)
+
+weekday_plot <- ggplot(flights_dow, aes(day_of_week, dow_count,group=1)) + 
+  geom_line() + 
+  labs(x="Day of Week",
+       y="Number of Flights",
+       title= "Flight Distribution by Day of Week") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+grid.arrange(monthly_plot, weekday_plot, ncol=2)
+```
+
+```{r, fig.width=10}
+daily_plot
+```
+
+### Airports 
+
+The location of the airports can be seen from the map below.
+
+```{r, fig.width=8}
+#Airport Map
+airports_map <- dbGetQuery(con, "SELECT * FROM airports WHERE latitude is not null")
+leaflet() %>% addProviderTiles("CartoDB.Positron") %>%
+  addCircleMarkers(lng = airports_map$longitude,
+                   lat = airports_map$latitude,
+                   label = airports_map$airport, 
+                   weight = 1, opacity = 1, 
+                   radius = 1, 
+                   stroke = TRUE)
+```
+
+When we list the number of airports according to states, the most airports were in Texas with number of 24. Second one was California with 22 and third state was Alaska with 19 airports.
+
+There were 322 airports in USA in 2015. When we analyze total number of airports in cities and the percentage of cities with only one airport among all cities was 95% and the percentage of cities with two airports is 5%.
+
+```{r, fig.width=10}
+#Count by State
+airports_state <- dbGetQuery(con, "SELECT state, count(*) AS AirportCount FROM airports GROUP BY state ORDER BY COUNT(*) DESC LIMIT 10")
+
+state_plot <- ggplot(airports_state, aes(x = reorder(state, airportcount), y = airportcount)) + 
+  geom_bar(stat = "identity", aes(fill=state)) +
+  theme(legend.position = "none") +
+  coord_flip() +
+  labs(x="Number of Airports",
+       y="State",
+       title="States with the Highest Number of Airports")
+  
+
+#Count by City Percent
+airports_city <- dbGetQuery(con, "SELECT AirportCount, COUNT(*) AS Count
+                                  FROM (SELECT city, count(*) AS AirportCount 
+                                        FROM airports 
+                                        GROUP BY city) a
+                                  GROUP BY AirportCount")
+
+city_percent_plot <- ggplot(airports_city, aes(x = "", y = count)) +
+  geom_bar(stat="identity",width = 1,fill= c("darkgreen","maroon")) +
+  coord_polar("y") +
+  geom_text(aes(label = paste0(round(count/308*100,0), "%")), color = "white", 
+            position = position_stack(vjust = 0.5)) +
+  theme_void() +
+  labs(title="Number of Airports in Cities",
+       caption = "95% of cities have 1 airport, 5% of cities have 2 airports.") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+grid.arrange(state_plot, city_percent_plot, ncol = 2)
+```
+
+The airports with the highest numbers of flights are shown in the graph. Atlanta was the airport with the highest number of flights among 322 airports in the United States of America.
+
+```{r}
+#Airport Departure Flights
+departure_airports <- dbGetQuery(con, "
+SELECT f.origin_airport as airport, COUNT(*)/1000 AS FlightCount
+FROM flights f 
+JOIN airports ao ON f.origin_airport = ao.iata_code
+GROUP BY f.origin_airport
+ORDER BY COUNT(*) DESC
+LIMIT 10")
+
+ggplot(departure_airports, aes(x = reorder(airport, flightcount), y = flightcount)) + 
+  geom_bar(stat = "identity", aes(fill=airport)) +
+  labs(x="Flight Count (in thousands)",
+       y="Airport",
+       title="Airports with Most Flights") +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  coord_flip()
+```
+
+### Airlines
+
+There were 14 different airlines in our data set and the three airlines with the largest number of flights are Southwest (WN), Delta (DL) and American Airlines (AA). On the other hand, the lowest number of flights were Virgin America (VX), Hawaiian Airlines (HA) and Frontier Airlines(F9). Southwest operated its flights with more than 700 airplanes. With this capacity, Southwest total number flights were about 40% higher than its closest competitor.
+
+```{r}
+flights_airline <- dbGetQuery(con,
+                              'SELECT airline, count(airline) as airline_count
+                              FROM flights group by airline')
+
+airline_plot <- ggplot(flights_airline,aes(airline, airline_count, color=airline)) +
+  geom_point() +
+  labs(x="Airline",
+       y="Number of Flights",
+       color="Airline",
+       title="Flight Distribution by Airline") +
+  theme(legend.position = "none")
+
+```
+
+## Detailed Airline Analysis
+
+If we compare the size of fleets and total number flights of airlines, Southwest (WN) have the highest number of flights comparing to competitor although fleet size was less than the American Airlines (AA) and Delta Airlines (DL) especially. This can be explained by Southwest airlines is a low-cost carrier and it has a different business model that operates only narrow body planes to maximize number of flights with the possible lowest cost.
+
+```{r, fig.width=10}
+airline_planes <- dbGetQuery(con, 
+"SELECT f.airline AS AirlineCode, a.airline, COUNT(DISTINCT f.tail_number) AS PlaneCount, COUNT(*) AS FlightCount
+FROM flights f 
+JOIN airlines a ON f.airline = a.iata_code
+GROUP BY f.airline, a.airline
+ORDER BY 3 DESC
+")
+
+ggplot(airline_planes, aes(x=reorder(airlinecode,planecount), y=flightcount, size=planecount, color=planecount)) +
+  geom_point() +
+  labs(x="Airlines", y="Flight Count") +
+  theme(legend.position = "none") 
+```
+
+## Analysis of Flights with Delays
+
+### Percentage of Delayed Flights
+
+#### Departures - Monthly
+
+When we analyze distribution of departure flight delays for more than half an hour by month, the percentage of delays reach its peak in June. It is probably due the increase of total number of flights and 15% of the flights were delayed. Highest top 5 delayed rate were in June, July, December, January and August. For the months in summer can be explained by the increase in total number of flights and rest can be with the weather conditions in winter. On the other hand, the lowest delay rate was in October with 7%. In general, we can say that 11% of flights delayed for more than half an hour.
+
+#### Arrivals - Monthly
+
+If we make same analysis for arrival delays, the highest and lowest rate of delays were in June and October respectively as it was in departure delays rate graph. Therefore, we can conclude that there is no difference on the basis of departure and arrival airports. 
+
+```{r, fig.width=10}
+
+flights_depdel_mon <- dbGetQuery(con,
+                              'SELECT month, TotalCount, ROUND(CAST(DelayCount AS DECIMAL(10,2))/CAST(TotalCount AS DECIMAL(10,2)) * 100, 2) as PercentageDelay FROM
+                              (SELECT month, 
+                              COUNT(CASE WHEN departure_delay > 30 THEN 1 END) AS DelayCount,
+                              COUNT(departure_delay) as TotalCount
+                              FROM flights
+                              GROUP BY month) depmon')
+
+
+flights_depdel_mon$month_name <- month.abb[flights_depdel_mon$month]
+
+plot_1 <- ggplot(flights_depdel_mon, aes(factor(month_name, levels=month.abb), 
+                               percentagedelay, size=totalcount, group=1)) +
+  geom_point() +
+  labs(x="Month",
+       y="Percentage of Delayed Departures",
+       size="Total Flights",
+       title="Departure Delay Distribution by Months",
+       caption="Only delays higher than 30 minutes are selected") +
+  theme(legend.position = "bottom")
+
+
+flights_ardel_mon <- dbGetQuery(con,
+                              'SELECT month, TotalCount, ROUND(CAST(DelayCount AS DECIMAL(10,2))/CAST(TotalCount AS DECIMAL(10,2)) * 100, 2) as PercentageDelay FROM
+                              (SELECT month, 
+                              COUNT(CASE WHEN arrival_delay > 30 THEN 1 END) AS DelayCount,
+                              COUNT(arrival_delay) as TotalCount
+                              FROM flights
+                              GROUP BY month) armon')
+
+flights_ardel_mon$month_name <- month.abb[flights_ardel_mon$month]
+
+plot_2 <- ggplot(flights_ardel_mon, aes(factor(month_name, levels=month.abb), 
+                               percentagedelay, size=totalcount, group=1)) +
+  geom_point() +
+  labs(x="Month",
+       y="Percentage of Delayed Arrivals",
+       size="Total Flights",
+       title="Arrival Delay Distribution by Months",
+       caption="Only delays higher than 30 minutes are selected") +
+  theme(legend.position = "bottom")
+
+grid.arrange(plot_1, plot_2, ncol=2)
+```
+
+#### Departures - Day of Week
+
+If we analyze departure delays rate by day of week, the highest rate of delay was on Monday with 13% and he lowest on Saturday with 9.7%. We can explain low rate of delay with the lowest total number of flights on Saturday. Delay rate fluctuates between 10.75% and 12.25% for the days except Saturday.
+
+#### Arrivals - Day of Week
+
+If we examine the delay rates in more detail, the rate of arrival delays not caused from the departure airport is again the highest on Mondays and the lowest on Saturdays. 
+
+```{r, fig.width=10}
+flights_depdel_dow <- dbGetQuery(con,
+                              'SELECT day_of_week, TotalCount, ROUND(CAST(DelayCount AS DECIMAL(10,2))/CAST(TotalCount AS DECIMAL(10,2)) * 100, 2) as PercentageDelay FROM
+                              (SELECT day_of_week, 
+                              COUNT(CASE WHEN departure_delay > 30 THEN 1 END) AS DelayCount,
+                              COUNT(departure_delay) as TotalCount
+                              FROM flights
+                              GROUP BY day_of_week) depdow')
+
+flights_depdel_dow$day_of_week <- factor(flights_depdel_dow$day_of_week)
+
+plot_1 <- ggplot(flights_depdel_dow, aes(day_of_week, 
+                               percentagedelay, size=totalcount, group=1)) +
+  geom_point() +
+  labs(x="Day of Week",
+       y="Percentage of Delayed Departures",
+       size="Total Flights",
+       title="Departure Delays by Day of Week",
+       caption="Only delays higher than 30 minutes are selected") +
+  theme(legend.position = "bottom")
+
+flights_ardel_dow <- dbGetQuery(con,
+                              'SELECT day_of_week, TotalCount, ROUND(CAST(DelayCount AS DECIMAL(10,2))/CAST(TotalCount AS DECIMAL(10,2)) * 100, 2) as PercentageDelay FROM
+                              (SELECT day_of_week, 
+                              COUNT(CASE WHEN arrival_delay > 30 THEN 1 END) AS DelayCount,
+                              COUNT(arrival_delay) as TotalCount
+                              FROM flights
+                              GROUP BY day_of_week) armon')
+
+flights_ardel_dow$day_of_week <- factor(flights_ardel_dow$day_of_week)
+
+plot_2 <- ggplot(flights_ardel_dow, aes(day_of_week, 
+                               percentagedelay, size=totalcount, group=1)) +
+  geom_point() +
+  labs(x="Day of Week",
+       y="Percentage of Delayed Arrivals",
+       size="Total Flights",
+       title="Arrival Delays by Day of Week",
+       caption="Only delays higher than 30 minutes are selected") +
+  theme(legend.position = "bottom")
+
+grid.arrange(plot_1, plot_2, ncol=2)
+```
+
+### Average Departure and Arrival Delays in Minutes
+
+In the calculation of the average delays, we didn't include negative values(early arrivals) into account but rather, we consider them as 0 since these flights have no delay and we only focus on only delays in that part of the analysis
+
+#### Departures - Monthly
+
+In this graph, we want to analyze average departure delays in minutes for all delayed flights. Similarly, highest average delayed minutes was higher in June with 16 minutes and lowest in September and October with 8 minutes.
+
+#### Arrivals - Monthly
+
+If we look at the average arrival delays in minutes, the highest average with 16 minutes in June and lowest average with 7 minutes in October for the flights by months.
+
+```{r, fig.width=10}
+flights_depdel_mon_av <- dbGetQuery(con,
+                              'SELECT month, TotalCount, ROUND(CAST(av_depdel0 AS
+                              DECIMAL(10,2))/CAST(TotalCount AS DECIMAL(10,2)), 2) 
+                              as AverageDepDelMon FROM
+                              (SELECT month, SUM(CASE WHEN departure_delay > 0 THEN 
+                              departure_delay END) AS av_depdel0, COUNT(departure_delay) as TotalCount
+                              FROM flights
+                              GROUP BY month) depmon_av')
+
+flights_depdel_mon_av$month_name <- month.abb[flights_depdel_mon_av$month]
+
+plot_1 <- ggplot(flights_depdel_mon_av, aes(factor(month_name, levels=month.abb), 
+                               averagedepdelmon, size=totalcount, group=1)) +
+  geom_point() +
+  labs(x="Month",
+       y="Average Departure Delays by Month",
+       size="Total Flights",
+       title="Average Departure Delays by Months") +
+  theme(legend.position = "bottom")
+
+flights_ardel_mon_av <- dbGetQuery(con,
+                              'SELECT month, TotalCount, ROUND(CAST(av_ardel0 AS
+                               DECIMAL(10,2))/CAST(TotalCount AS DECIMAL(10,2)), 2) 
+                               as AverageArDelMon FROM
+                               (SELECT month, SUM(CASE WHEN arrival_delay > 0 THEN arrival_delay END) AS av_ardel0, COUNT(arrival_delay) as TotalCount
+                              FROM flights
+                              GROUP BY month) armon_av')
+
+flights_ardel_mon_av$month_name <- month.abb[flights_ardel_mon_av$month]
+
+plot_2 <- ggplot(flights_ardel_mon_av, aes(factor(month_name, levels=month.abb), 
+                               averageardelmon, size=totalcount, group=1)) +
+  geom_point() +
+  labs(x="Month",
+       y="Average Arrival Delays by Months",
+       size="Total Flights",
+       title="Average Arrival Delays by Months") +
+  theme(legend.position = "bottom")
+
+grid.arrange(plot_1, plot_2, ncol = 2)
+```
+
+#### Departures - Day of Week
+
+When we look at the departure delays in minutes for all delayed flights, the highest average delayed minutes was higher on Monday with 13 minutes and the lowest on Saturday with 10 minutes. This difference may be due to 20 percent fewer flights in average on Saturdays compared to other days. For the days except than Saturday, this average fluctuates between 11 minutes to 13 minutes.
+
+#### Arrivals - Day of Week
+
+If we analyze the delay minutes in more detail, the average minutes of arrival delays not caused from the departure by day of week is almost same with the previous graph except for Sunday. The average delay in minutes decreased to 11 for Sunday.
+
+```{r, fig.width=10}
+flights_depdel_dow_av <- dbGetQuery(con,
+                              'SELECT day_of_week, TotalCount, ROUND(CAST(av_depdel0 AS
+                               DECIMAL(10,2))/CAST(TotalCount AS DECIMAL(10,2)), 2) 
+                               as AverageDepDelDow FROM
+                               (SELECT day_of_week, SUM(CASE WHEN departure_delay > 0 THEN
+                               departure_delay END) AS av_depdel0, COUNT(departure_delay) 
+                               as TotalCount
+                               FROM flights
+                               GROUP BY day_of_week) depdow_av')
+
+plot_1 <- ggplot(flights_depdel_dow_av, aes(factor(day_of_week), averagedepdeldow, size=totalcount, group=1)) +
+  geom_point() +
+  labs(x="Day of Week",
+       y="Average Departure Delays by Day of Week",
+       size="Total Flights",
+       title="Average Departure Delays by Day of Week") +
+  theme(legend.position = "bottom")
+
+
+flights_ardel_dow_av <- dbGetQuery(con,
+                              'SELECT day_of_week, TotalCount, ROUND(CAST(av_ardel0 AS
+                               DECIMAL(10,2))/CAST(TotalCount AS DECIMAL(10,2)), 2) 
+                               as AverageArDelDow FROM
+                               (SELECT day_of_week, SUM(CASE WHEN arrival_delay > 0 THEN 
+                               arrival_delay END) AS av_ardel0, COUNT(arrival_delay) as TotalCount
+                               FROM flights
+                               GROUP BY day_of_week) ardow_av')
+
+
+plot_2 <- ggplot(flights_ardel_dow_av, aes(factor(day_of_week), 
+                               averageardeldow, size=totalcount, group=1)) +
+  geom_point() +
+  labs(x="Day of Week",
+       y="Average Arrival Delays by Day of Week",
+       size="Total Flights",
+       title="Average Arrival Delays by Day of Week") +
+  theme(legend.position = "bottom")
+
+grid.arrange(plot_1, plot_2, ncol = 2)
+```
+
+### Average Delay by Airline & Airports
+
+In this graph, the main aim is to show which airline has higher rate of delay. Although having fewer flights comparing competitors, Spirit Airlines (NK) was the airlines with the most delays by almost 20%. The second airlines with the highest delay rate were Frontier Airlines (F9) by 17%. When we analyze top three biggest airlines by total flights, it seems that Delta Airlines has lowest rate of delay by around 8%. Southwest and American Airlines rates were higher than 10%. Moreover, although its total flight number is low comparing other airlines, Hawaiian Airlines has the lowest delay rate by around 4%. 
+
+Number of airplanes may a cause of higher delay rate but there may be many other factors for source of delay.  For example, the delay rate may increase due to higher air traffic in base airport for airlines. Also, geographical location or weather conditions at the airport is not suitable for airline operations.
+
+
+```{r, fig.width=10}
+
+flights_del_airl <- dbGetQuery(con,
+                              'SELECT airline, TotalCount, ROUND(CAST(DelayCount AS DECIMAL(10,2))/CAST(TotalCount AS DECIMAL(10,2)) * 100, 2) as PercentageDelay FROM
+                              (SELECT airline, 
+                              COUNT(CASE WHEN arrival_delay > 30 THEN 1 END) AS DelayCount,
+                              COUNT(arrival_delay) as TotalCount
+                              FROM flights
+                              GROUP BY airline) ar_airp')
+
+plot_1 <- ggplot(flights_del_airl, aes(airline, percentagedelay, size=totalcount, group=1)) +
+  geom_point() +
+  labs(x="Airline",
+       y="Rate of Average Arrival Delays by Airline",
+       size="Total Flights",
+       title="Percentage of Delayed Flights by Airline",
+       caption="Only Delays higher than 30 min. are selected")
+
+avg_oairp <- dbGetQuery(con,
+'WITH ar_airp AS
+(
+SELECT origin_airport,
+		CAST(COUNT(CASE WHEN f.arrival_delay > 30 THEN 1 END) AS DECIMAL(10,2)) AS DelayCount,
+	  	CAST(COUNT(f.arrival_delay) AS DECIMAL(10,2)) AS TotalCount 
+FROM flights f
+INNER JOIN airports air ON f.origin_airport=air.IATA_CODE
+GROUP BY f.origin_airport
+HAVING COUNT(*) >= 1000
+),
+grouped_airp AS
+(
+SELECT *, CASE WHEN TotalCount < 5000 THEN 1 
+				WHEN TotalCount < 10000 THEN 2 
+				WHEN TotalCount < 50000 THEN 3 
+				WHEN TotalCount < 100000 THEN 4 
+				ELSE 5 END AS GroupNumber
+FROM ar_airp
+)
+SELECT GroupNumber, COUNT(*) AS AirportCount, ROUND(SUM(DelayCount) / SUM(TotalCount) * 100, 2) as PercentageDelay 
+FROM grouped_airp
+GROUP BY GroupNumber')
+
+groups <- c("1K-5K", "5K-10K", "10K-50K", "50K-100K", ">100K")
+
+avg_oairp$groupnumber <- as.factor(avg_oairp$groupnumber)
+
+levels(avg_oairp$groupnumber) <- groups
+
+plot_2 <- ggplot(avg_oairp, aes(factor(groupnumber, level=groupnumber), percentagedelay, fill=factor(groupnumber))) +
+  geom_col() +
+  labs(x="Total Number of Flights",
+       y="Percentage of Delayed Flights",
+       title="Percentage of Delayed Flights for Departure Airports",
+       caption="Only delays higher than 30 minutes are selected",
+       fill="Groups") +
+  theme(legend.position = "none")
+
+avg_dairp <- dbGetQuery(con,
+'WITH ar_airp2 AS
+(
+SELECT destination_airport,
+		CAST(COUNT(CASE WHEN f.arrival_delay > 30 THEN 1 END) AS DECIMAL(10,2)) AS DelayCount,
+	  	CAST(COUNT(f.arrival_delay) AS DECIMAL(10,2)) AS TotalCount 
+FROM flights f
+INNER JOIN airports air ON f.destination_airport=air.IATA_CODE
+GROUP BY f.destination_airport
+HAVING COUNT(*) >= 1000
+),
+grouped_airp2 AS
+(
+SELECT *, CASE WHEN TotalCount < 5000 THEN 1 
+				WHEN TotalCount < 10000 THEN 2 
+				WHEN TotalCount < 50000 THEN 3 
+				WHEN TotalCount < 100000 THEN 4 
+				ELSE 5 END AS GroupNumber
+FROM ar_airp2
+)
+SELECT GroupNumber, COUNT(*) AS AirportCount, ROUND(SUM(DelayCount) / SUM(TotalCount) * 100, 2) as PercentageDelay 
+FROM grouped_airp2
+GROUP BY GroupNumber')
+
+avg_dairp$groupnumber <- as.factor(avg_dairp$groupnumber)
+
+
+levels(avg_dairp$groupnumber) <- groups
+
+plot_3 <- ggplot(avg_dairp, aes(factor(groupnumber, levels=groupnumber), percentagedelay, fill=factor(groupnumber))) +
+  geom_col() +
+  labs(x="Total Number of Flights",
+       y="Percentage of Delayed Flights",
+       title="Percentage of Delayed Flights for Arrival Airports",
+       caption="Only delays higher than 30 minutes are selected",
+       fill="Groups") +
+  theme(legend.position = "none")
+
+plot_1
+```
+
+#### Percentage of Delayed Flights for Origin Airports
+
+In this graph, origin airports are categorized in 5 different groups with the total number of flights. If we compare the airports by percentage of delayed flights, lowest percentage of delayed flights are shown with green bar in graph by 9.7% which symbolized total number of flights between 10.000 to 50.000 airports. The highest delay percentage was 12.1% for the airports total flights were between 50.000 to 100.000 flights. There is no strict relationship with the increase in the number of flights and percentage of delays.
+
+#### Percentage of Delayed Flights for Destination Airports
+
+In the second graph, destination airports are categorized in 5 different groups with the total number of flights. The percentage of delayed flights fluctuates between 11% and 12.3% and there are no big differences when we compare with previous graph for origin airports.
+
+```{r, fig.width=10}
+grid.arrange(plot_2, plot_3, ncol = 2)
+```
+
+## Effects on Delay
+
+### Destination
+
+The following graph exhibits the most delayed routes. The destination between San Francisco International Airport and Los Angeles International Airport seems to have the highest number of delays among the other destinations, by far. It is followed by the destination between Chicago O'Hare International Airport and LaGuardia Airport (Marine Air Terminal). However, it should be also kept in mind that these destinations are among the most flied destinations in the USA.
+
+```{r, fig.width=10}
+destination <- dbGetQuery(con, "SELECT MAX(route) AS route, delay_num FROM (SELECT route, SUM(delays) AS delay_num FROM
+((SELECT CONCAT(origin_airport,'- ',  destination_airport) AS route, COUNT(flight_number) AS delays FROM flights
+  WHERE arrival_delay > 30
+  GROUP BY route
+  ORDER BY delays DESC
+  LIMIT 30)
+  UNION ALL
+  (SELECT CONCAT(destination_airport,'- ',  origin_airport) AS route, COUNT(flight_number) AS delays FROM flights
+  WHERE arrival_delay > 30
+  GROUP BY route
+  ORDER BY delays DESC
+  LIMIT 30)) d
+  GROUP BY route) AS t
+  GROUP BY delay_num
+  ORDER BY delay_num DESC
+  ")
+
+destination$route <- factor(destination$route, levels=destination$route)
+
+ggplot(destination, aes(x=route, y=delay_num, fill=route))+
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle=60, size=10, hjust = 1),
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "none")+
+  labs(title = "Most Delayed Routes in 2015 (Both Directions)",
+       x="Route",
+       y="Number of Delays",
+       caption="*Only delays with more than 30 minutes have considered")
+```
+
+### Day Time
+
+We have split the day into 4 parts. Morning represents between 06:00 and 12:00 o'clock, afternoon represents between 12:00 and 18:00 o'clock, evening represents between 18:00-24:00 and night represents between 00:00 and 06:00. The bar chart below shows that, the delays are last longer in evenings and the average delay time reaches approximately to 40 minutes. On the other hand, the least average delay time is observed at nights. This might be a consequence of the rush during the evenings. However in the nights, there are not as much as flight than the rest of the day.
+
+```{r, fig.width=10}
+day_time0 <- dbGetQuery(con, "SELECT CASE WHEN hour <= 6 THEN 'Night'
+  WHEN hour <=12 THEN 'Morning'
+  WHEN hour <=18 THEN 'Afternoon'
+  ELSE 'Evening' END AS day_time, ROUND(AVG(delay), 2) AS avg_delay
+FROM  (SELECT CAST(LEFT(scheduled_departure, 2) AS int) AS hour, arrival_delay AS delay
+  FROM flights
+  WHERE arrival_delay > 0) AS subq
+GROUP BY day_time;")
+day_time0$day_time <- factor(day_time0$day_time, levels = c("Morning","Afternoon", "Evening","Night"))
+ggplot(day_time0, aes(x= day_time, y=avg_delay, fill="red")) +
+  geom_col()+
+  labs(title="Average Delay in Minutes by the Time of Day",
+       x="Time of Day",
+       y="Average Delay (in minutes)")+
+  theme(legend.position = "none")
+```
+
+### Taxi Time
+
+Taxi means the time that passed while taking position along the ground before the plane take-off or after landing. Taxi time could be depend on vary such as; volume, distance of the landing field so on. According to the graph, the top three airports, JFK, LGA and ORD are clearly separated from the others. While the general average taxi time is around 13 minutes, it takes more than 15 minutes for those 3 airports.
+
+```{r, fig.width=10}
+airport_taxi30 <- dbGetQuery(con, "SELECT airport, ROUND(SUM(alltaxi.all_taxi)/ SUM(alltaxi.num),2) AS average_taxi FROM
+  ((SELECT origin_airport AS airport, ROUND(SUM(taxi_out),2) AS all_taxi, COUNT(origin_airport) AS num
+  FROM flights
+  INNER JOIN airports
+  ON origin_airport = iata_code
+  GROUP BY origin_airport)
+  UNION ALL
+  (SELECT destination_airport AS airport, ROUND(SUM(taxi_in),2) AS all_taxi, COUNT(destination_airport) AS num
+  FROM flights
+  INNER JOIN airports
+  ON destination_airport = iata_code
+  GROUP BY destination_airport)) alltaxi
+GROUP BY airport
+ORDER BY average_taxi DESC
+LIMIT 30")
+airport_taxi30$airport <- factor(airport_taxi30$airport, levels=airport_taxi30$airport)
+ggplot(airport_taxi30, aes(x=airport, y=average_taxi, fill = airport))+
+  geom_col() +
+  theme(axis.text.x = element_text(angle=90, size=10, hjust = 1),
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "none") +
+  labs(title="Average Taxi Time in Minutes by Airports",
+       x = "Airports",
+       y="Average taxi time (minutes)")
+```
+
+
+## Detailed Plane Analysis
+
+In the following graph, we selected tail numbers with the highest delay-rate for each airline. However, since planes with low number of flights tend to have higher delay-rate, we decided to take the planes into consideration only if they have flied more than 730 times (more than twice a day) in a year. Spirit Airlines, American Eagle Airlines, Frontier Airlines and Skywest Airlines have at least one plane flied more than 730 times in a year and reached over 20% delay-rate. On the other hand, plane of Hawaiian Airlines with the highest delay-rate is just below 5%, showing that Hawaiian Airlines causes less last-minute surprises for its customers.
+
+```{r, fig.width=10}
+delayed_planes <- dbGetQuery(con,
+                              'WITH delayedplane AS 
+                              (SELECT tail_number, airline, COUNT(CASE WHEN arrival_delay > 30 
+                              THEN 1 END) AS DelayCount, COUNT(*) as TotalCount FROM flights
+                              WHERE tail_number IS NOT NULL 
+                              GROUP BY airline, tail_number),
+                              planedelays AS (SELECT airline, tail_number, totalcount, Delaycount,
+                              ROUND(CAST(delaycount AS DECIMAL(10,2))/
+                              CAST(totalcount AS DECIMAL(10,2)) * 100, 2) AS DelayRate
+                              FROM delayedplane
+                              WHERE TotalCount>730),
+                              mostdelays AS (
+                              SELECT *, ROW_NUMBER() OVER(PARTITION BY airline 
+                              ORDER BY DelayRate DESC) AS RowNum 
+                              FROM planedelays)
+                              SELECT * FROM mostdelays WHERE RowNum = 1')
+
+ggplot(delayed_planes, aes(airline, delayrate, size=totalcount)) + 
+  geom_point() +
+  geom_text_repel(aes(label = tail_number), size=3) +
+  labs(x="Airline",
+       y="Delay Rate",
+       caption="Planes having more than 730 flights are selected",
+       title="Planes with Highest Delay Rate",
+       size="Total Flight for the plane",
+       color= "Tail number of the plane") +
+  theme(legend.position = "none")
+```
+
+## Key Takeaways
+
++ 95% of the cities had one airport in the USA.
++ The state with the most airports is Texas with the total number of 24.
++ Southwest is the airline with highest number of 1,250,000 flights in 2015.
++ Delays mostly occur between San Francisco International Airport (SFO) and Los Angles International Airport (LAX) which normally can be considered as a close ranged flight (takes approximately 1 hour and 20 minutes).
++ Delays take longer time in average at the evenings compared to the rest of the day.
++ Planes need more taxi time at the John F. Kennedy International Airport (NY), LaGuardia International Airport (NY) and O'Hare International Airport (IL).
++ Hawaiian Airlines has the lowest delay-rate in the US.
++ Delay rates drops in Autumn.
++ There is little or no relationship between total number of flights of a plane and the delay rate.
+
+## Conclusion
+
+All in all, Hawaiian Airlines provides low and stable delay-rate so it can be a safe preference for travelers to avoid facing any last-minute delays. It’s followed by Alaska Airlines and Delta Air Lines. Moreover, delay rates decrease in Autumn. Therefore, selecting a travel within this period might decrease your risk of delay by almost half. In addition to that delays get longer during evening. On the other hand, delay-rate fluctuates according to the day of week. Lastly, total number of flights of the planes seems to have little or no effect on the delay-rate.
