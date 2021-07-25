@@ -1,0 +1,261 @@
+---
+title: "project1"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(dplyr)
+library(readxl)
+library(stringr)
+library(reshape2)
+```
+
+```{r Occupational Group}
+occ_group_overall <- read_xls("C:/Users/Emre - PC/Desktop/MEF Assignments/R Exercises/Group Project/Aranılan meslek grubuna göre işsizler.xls", range = "TÜRKİYE!A6:L92", col_names = c("year", "month", "total_unemployed", "manager", "prof", "tech", "cleric", "service", "agricul", "trade", "operator", "elemantary"))
+
+occ_group_male <- read_xls("C:/Users/Emre - PC/Desktop/MEF Assignments/R Exercises/Group Project/Aranılan meslek grubuna göre işsizler.xls", range = "TÜRKİYE!N6:Y92", col_names = c("year", "month", "total_unemployed", "manager", "prof", "tech", "cleric", "service", "agricul", "trade", "operator", "elemantary"))
+
+occ_group_female <- read_xls("C:/Users/Emre - PC/Desktop/MEF Assignments/R Exercises/Group Project/Aranılan meslek grubuna göre işsizler.xls", range = "TÜRKİYE!AA6:AL91", col_names = c("year", "month", "total_unemployed", "manager", "prof", "tech", "cleric", "service", "agricul", "trade", "operator", "elemantary"))
+
+```
+
+```{r Job Searching Channel}
+job_search_overall <- read_xls("C:/Users/Emre - PC/Desktop/MEF Assignments/R Exercises/Group Project/İş aradıkları kanala göre işsizler.xls", range = "TÜRKİYE!A6:P91", col_names = c("year", "month", "total_unemployed", "to_employers", "to_relatives", "to_emp_office", "to_emp_agencies", "to_newspaper", "insert_ad_to_newspaper", "take_interview", "look_place_equip_to_est_bus", "look_credit_license_to_est_bus", "wait_call_from_emp_office", "wait_result_of_app", "wait_result_of_comp_for_public_sec", "others"))
+
+job_search_male <- read_xls("C:/Users/Emre - PC/Desktop/MEF Assignments/R Exercises/Group Project/İş aradıkları kanala göre işsizler.xls", range = "TÜRKİYE!R6:AG91", col_names = c("year", "month", "total_unemployed", "to_employers", "to_relatives", "to_emp_office", "to_emp_agencies", "to_newspaper", "insert_ad_to_newspaper", "take_interview", "look_place_equip_to_est_bus", "look_credit_license_to_est_bus", "wait_call_from_emp_office", "wait_result_of_app", "wait_result_of_comp_for_public_sec", "others"))
+
+job_search_female <- read_xls("C:/Users/Emre - PC/Desktop/MEF Assignments/R Exercises/Group Project/İş aradıkları kanala göre işsizler.xls", range = "TÜRKİYE!AI6:AX91", col_names = c("year", "month", "total_unemployed", "to_employers", "to_relatives", "to_emp_office", "to_emp_agencies", "to_newspaper", "insert_ad_to_newspaper", "take_interview", "look_place_equip_to_est_bus", "look_credit_license_to_est_bus", "wait_call_from_emp_office", "wait_result_of_app", "wait_result_of_comp_for_public_sec", "others"))
+```
+
+
+```{r Last Graduated Major}
+last_graduated_major <- read_xls("C:/Users/Emre - PC/Desktop/MEF Assignments/R Exercises/Group Project/Yüksekokul ve fakülte mezunlarının en son mezun oldukları alana göre işgücü durumu.xls", range = "TURKIYE!A6:Y41", col_names = c("year", "statistics", "higher_ed_grad", "education", "arts", "humanities", "languages", "social_sci", "journalism", "business", "law", "biology_env_related_sci", "physical_sci", "math_stat", "info_communication_tech", "engineering", "manufacturing_processing", "architecture_construction", "agriculture_forestry_fishery", "veterinary", "health", "welfare", "personal_services", "occupational_health_transport_services", "security_services"))
+
+```
+
+
+```{r Educational Level}
+educational_level_overall <- read_xls("C:/Users/Emre - PC/Desktop/MEF Assignments/R Exercises/Group Project/Eğitim durumuna göre işgücü durumu.xls", range = "TÜRKİYE!A7:Q92", col_names = c("year", "month", "lf_illeterate", "lf_less_than_hs", "lf_highschool", "lf_voc_hs", "lf_higher_ed","emp_illeterate", "emp_less_than_hs", "emp_highschool", "emp_voc_hs", "emp_higher_ed","unemp_illeterate", "unemp_less_than_hs", "unemp_highschool", "unemp_voc_hs", "unemp_higher_ed" ))
+
+educational_level_male <- read_xls("C:/Users/Emre - PC/Desktop/MEF Assignments/R Exercises/Group Project/Eğitim durumuna göre işgücü durumu.xls", range = "TÜRKİYE!AK7:BA92", col_names = c("year", "month", "lf_illeterate", "lf_less_than_hs", "lf_highschool", "lf_voc_hs", "lf_higher_ed","emp_illeterate", "emp_less_than_hs", "emp_highschool", "emp_voc_hs", "emp_higher_ed","unemp_illeterate", "unemp_less_than_hs", "unemp_highschool", "unemp_voc_hs", "unemp_higher_ed" ))
+
+educational_level_female <- read_xls("C:/Users/Emre - PC/Desktop/MEF Assignments/R Exercises/Group Project/Eğitim durumuna göre işgücü durumu.xls", range = "TÜRKİYE!BW7:CM92", col_names = c("year", "month", "lf_illeterate", "lf_less_than_hs", "lf_highschool", "lf_voc_hs", "lf_higher_ed","emp_illeterate", "emp_less_than_hs", "emp_highschool", "emp_voc_hs", "emp_higher_ed","unemp_illeterate", "unemp_less_than_hs", "unemp_highschool", "unemp_voc_hs", "unemp_higher_ed" ))
+```
+
+
+```{r}
+job_search_overall
+annual_jobsearch <- filter(job_search_overall, grepl("Annual", month))
+colnames(annual_jobsearch)
+
+annual_jobsearch_melt <- annual_jobsearch %>%
+  select(year, month, total_unemployed, to_employers, to_relatives, to_emp_office, to_emp_agencies, to_newspaper, insert_ad_to_newspaper, take_interview, look_place_equip_to_est_bus, look_credit_license_to_est_bus, wait_call_from_emp_office, wait_result_of_app, wait_result_of_comp_for_public_sec, others)%>%
+  gather(key="type", value = "value", -month, -year)
+
+
+annual_jobsearch_melt
+
+ggplot(annual_jobsearch_melt, aes(x=year, y=value, fill=type)) +
+  geom_area()
+```
+
+```{r}
+job_search_overall$month <- str_split_fixed(job_search_overall$month, " - ", 2)[,2]
+job_search_overall
+monthly_jobsearch <- filter(job_search_overall, !grepl("Annual", month))
+
+monthly_jobsearch
+unemp_gr<-monthly_jobsearch%>%
+  transmute(month_year = paste(year, month, sep = " "), total_unemployed)
+            
+unemp_gr
+
+#Grafikte x ekseni alfabetik sıraya göre değil, tarih sırasına göre gelmesi için yapılan dönüşüm
+unemp_gr$month_year <- as.character(unemp_gr$month_year)
+unemp_gr$month_year <- factor(unemp_gr$month_year, level=unemp_gr$month_year)
+
+#Yıllara göre toplam işsizliğin değişimi
+ggplot(unemp_gr, aes(x=factor(month_year), y=total_unemployed, group= 1)) +
+  geom_line()+
+  labs(title="Total number of unemployed people over years",
+       x="years",
+       y="Total number of unemployed")+
+  theme(axis.text.x = element_text(angle=90, size=5))
+
+```
+
+```{r}
+job_search_female$month <- str_split_fixed(job_search_female$month, " - ", 2)[,2]
+job_search_male$month <- str_split_fixed(job_search_male$month, " - ", 2)[,2]
+
+monthly_jobsearch_male <- filter(job_search_male, !grepl("Annual", month))
+monthly_jobsearch_female <- filter(job_search_female, !grepl("Annual", month))
+
+unemp_gr_male<-monthly_jobsearch_male%>%
+  transmute(month_year = paste(year, month, sep = " "), total_unemployed)
+
+unemp_gr_female<-monthly_jobsearch_female%>%
+  transmute(month_year = paste(year, month, sep = " "), total_unemployed)
+unemp_gr_female
+
+unemp_merged <-merge(unemp_gr_female,unemp_gr_male, by="month_year", all=TRUE, sort = FALSE)
+unemp_merged
+unemp_merged <- unemp_merged %>%
+  rename(female=total_unemployed.x, male=total_unemployed.y)
+
+#Grafikte x ekseni alfabetik sıraya göre değil, tarih sırasına göre gelmesi için yapılan dönüşüm
+unemp_merged$month_year <- as.character(unemp_merged$month_year)
+unemp_merged$month_year <- factor(unemp_merged$month_year, level=unemp_merged$month_year)
+
+#Yıllara göre toplam işsizliğin cinsiyete göre dağılımı
+ggplot(unemp_merged, aes(x=factor(month_year))) +
+  geom_line(aes(y=female, color="female", group=1))+
+  geom_line(aes(y=male, color="male", group=1))+
+  theme(axis.text.x = element_text(angle=90, size=5))+
+  labs(title = "Unemployment by Gender Over the Years",
+       x="Year",
+       y="Unemployment")
+
+```
+
+
+```{r}
+#İŞKUR ile özel istihdam bürolarının yıllara göre durumları
+applied_office_types<- monthly_jobsearch %>%
+  transmute(month_year = paste(year, month, sep = " "), to_emp_office, to_emp_agencies)
+
+applied_office_types_melted <- applied_office_types %>%
+  melt(id.vars="month_year", variable.name= "Office_Type", value.name="Value")
+
+applied_office_types
+
+#Grafikte x ekseni alfabetik sıraya göre değil, tarih sırasına göre gelmesi için yapılan dönüşüm
+applied_office_types$month_year <- as.character(applied_office_types$month_year)
+applied_office_types$month_year <- factor(applied_office_types$month_year, level=applied_office_types$month_year)
+
+#İş arama kurumlarından devlet ve özel kurumların yıllara göre popülaritesi
+ggplot(applied_office_types, aes(x=factor(month_year))) +
+  geom_line(aes(y=to_emp_office, color="Employee office", group=1))+
+  geom_line(aes(y=to_emp_agencies, color="Employee agency", group=1))+
+  theme(axis.text.x = element_text(angle =90, size=5))+
+  labs(title="The Popularity of Employee Providers Over The Years",
+       x="Year",
+       y="Employee Provider Type")
+```
+
+```{r}
+#Kendi iş yerini kurmayı planlayanlar ve kurmak için aksiyona geçenlerin durumu
+monthly_jobsearch
+
+own_bus_df <- monthly_jobsearch%>%
+  transmute(month_year = paste(year, month, sep = " "), look_place_equip_to_est_bus, look_credit_license_to_est_bus)%>%
+  rename(in_action=look_place_equip_to_est_bus, planning_for = look_credit_license_to_est_bus)
+own_bus_df
+
+#Grafikte x ekseni alfabetik sıraya göre değil, tarih sırasına göre gelmesi için yapılan dönüşüm
+own_bus_df$month_year <- as.character(own_bus_df$month_year)
+own_bus_df$month_year <- factor(own_bus_df$month_year, level=own_bus_df$month_year)
+
+
+ggplot(own_bus_df, aes(x=factor(month_year))) +
+  geom_line(aes(y=in_action, color="in_action", group=1))+
+  geom_line(aes(y=planning_for, color="planning for", group=1))+
+  theme(axis.text.x = element_text(angle =90, size=5))+
+  labs(title="The Trend of Establishing Own Business Idea Over The Years",
+       x="Year",
+       y="NUmber of People")
+```
+
+```{r}
+educational_level_overall$month <- str_split_fixed(educational_level_overall$month, " - ", 2)[,2]
+
+#Excel'de 2014 Ocak ayı yazılımında " - " yerine "- " şeklinde olduğu için January manuel eklendi
+educational_level_overall$month[1]<-"January"
+educational_level_overall
+
+monthly_educational <- filter(educational_level_overall, !grepl("Annual", month))
+
+total_labour_month<-monthly_educational%>%
+  transmute(month_year = paste(year, month, sep = " "), illterate=lf_illeterate, less_than_hs=lf_less_than_hs, highschool=lf_highschool, voc_hs=lf_voc_hs, higher_ed=lf_higher_ed)
+
+total_labour_month
+
+```
+
+```{r}
+yearly_educational <- filter(educational_level_overall, grepl("Annual", month))
+total_labour_yearly_educational <- yearly_educational%>%
+  transmute(year=as.character(year),illeterate=lf_illeterate, less_than_hs=lf_less_than_hs, highschool=lf_highschool, voc_hs=lf_voc_hs, higher_ed=lf_higher_ed)
+
+# deneme <- yearly_educational
+# deneme <-subset(deneme, select = -c(illeterate))
+# deneme
+
+total_labour_yearly_educational_melt <- total_labour_yearly_educational %>%
+  gather(key="type", value="value", -year)
+
+total_labour_yearly_educational_melt
+
+#Türkiye'nin yıllara göre değişen iş gücü toplamının eğitim seviyesine göre dağılımı
+ggplot(total_labour_yearly_educational_melt, aes(x=year, y=value, fill=factor(type, levels= c("higher_ed", "voc_hs", "highschool", "less_than_hs", "illeterate"))))+
+  geom_col(position = "stack")+
+  guides(fill=guide_legend(title="Education Types"))
+```
+
+
+```{r}
+emp_yearly_educational <- yearly_educational %>%
+  transmute(year=as.character(year), illeterate=emp_illeterate, less_than_hs=emp_less_than_hs, highschool=emp_highschool, voc_hs=emp_voc_hs, higher_ed=emp_higher_ed)
+
+emp_yearly_educational_melt
+
+emp_yearly_educational_melt<-emp_yearly_educational %>%
+  gather(key="Education_Level", value="Person", -year )
+
+# ggplot(emp_yearly_educational_melt, aes(x=year, y=Person, fill=factor(Education_Level, levels= c("higher_ed", "voc_hs", "highschool", "less_than_hs", "illeterate"))))+
+#   geom_bar(position = "stack")+
+#   guides(fill=guide_legend(title="Education Types"))+
+#   labs(title = "Number of Employed People by Education Levels Over the Years",
+#        y="Employed People")
+
+emp_yearly_educational_melt$Education_Level <- as.factor(emp_yearly_educational_melt$Education_Level)
+levels(emp_yearly_educational_melt$Education_Level) <- c("higher_education", "highschool", "illeterate", "less than highschool", "vocational highschool")
+
+
+ggplot(emp_yearly_educational_melt, aes(x = year, y = Person)) +
+  geom_bar(stat = "identity", aes(fill = as.factor(Education_Level))) +
+  facet_wrap(~ Education_Level)+
+  labs(title="Employment Numbers by Education Level",
+       y="Number of People (thous.)")+
+  theme(legend.position = "none",  plot.title = element_text(hjust = 0.5))
+
+
+
+```
+```{r}
+unemp_yearly_educational <- yearly_educational %>%
+  transmute(year=as.character(year), illeterate=unemp_illeterate, less_than_hs=unemp_less_than_hs, highschool=unemp_highschool, voc_hs=unemp_voc_hs, higher_ed=unemp_higher_ed)
+
+unemp_yearly_educational
+
+unemp_yearly_educational_melt<-unemp_yearly_educational %>%
+  gather(key="Education_Level", value="Person", -year )
+
+unemp_yearly_educational_melt
+
+unemp_yearly_educational_melt$Education_Level <- as.factor(unemp_yearly_educational_melt$Education_Level)
+levels(unemp_yearly_educational_melt$Education_Level) <- c("higher_education", "highschool", "illeterate", "less than highschool", "vocational highschool")
+
+ggplot(unemp_yearly_educational_melt, aes(x = year, y = Person)) +
+  geom_bar(stat = "identity", aes(fill = as.factor(Education_Level))) +
+  facet_wrap(~ Education_Level)+
+  labs(title="Unemployment Numbers by Education Level",
+       y="Number of People (thous.)")+
+  theme(legend.position = "none",  plot.title = element_text(hjust = 0.5))
+
+```
+
